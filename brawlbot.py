@@ -5,10 +5,26 @@ import keyboard
 import random
 import random
 import win32api, win32con
+from PIL import ImageDraw
+import numpy as np
+
+
+import pytesseract
+from PIL import Image, ImageFilter,ImageEnhance
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 isStuck = 0 
 # brawlers left region = (20,100,200,220)
 # loss exit region = (700,700,300,320)
+
+def hold(x,y):
+    win32api.SetCursorPos((x+random.randint(0, 5) ,y+random.randint(0, 5)))
+    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN,0,0)
+    time.sleep(12.12) #This pauses the script for 0.1 seconds
+    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP,0,0)
+    time.sleep(0.03)
+
+
 
 def click(x,y):
     win32api.SetCursorPos((x+random.randint(0, 5) ,y+random.randint(0, 5)))
@@ -44,26 +60,31 @@ def cloudAvg():
 def damaged(x,y):
     
     count = 0
-    if x>100 and y>200:
-        pic = pyautogui.screenshot(region = (400,300,800,500))
-        for xa in range(0,300,7):
-            for ya in range(0,400, 12): 
-                color = pic.getpixel((xa,ya))
-                if color[0]>200 and color[0]<237:
-                    count += 1
-                    
-        if count >1:
-            print("received damage")
-            attack()
-            time.sleep(0.3)
-            attack()
-            time.sleep(0.3)
-            attack()
+    if x != -1:
+        pic = pyautogui.screenshot(region = (x-50,y-100,200,300))
+    else:
+        pic = pyautogui.screenshot(region = (300,200,1000,600))
+
+    width, height = pic.size
+
+    for xa in range(0,width,4):
+        for ya in range(0,height, 4): 
+            color = pic.getpixel((xa,ya))
+            if color[0]>200 and color[0]<237:
+                count += 1
+                            
+    if count >3:
+        print("received damage")
+        attack()
+        time.sleep(0.3)
+        attack()
+        time.sleep(0.3)
+        attack()
         
                         
 
 def brawlMove(i,x,y):
-    direction = i;
+    direction = i
     if i==0:
         direction = random.randint(1, 4)
     
@@ -114,7 +135,22 @@ def react(sx,sy,cx,cy):
     else:
         isStuck = 0
         if cx == -1 :
-            brawlMove(0,sx,sy)
+            #move based on where center of screen is
+            difx = sx-750
+            dify = sy-550
+            if abs(difx)>300 and abs(dify)>300:
+                if difx >0:
+                    if dify>0:
+                        brawlMove(2,sx,sy)
+                    else:
+                        brawlMove(4,sx,sy)
+                else:
+                    if dify>0:
+                        brawlMove(1,sx,sy)
+                    else:
+                        brawlMove(3,sx,sy)
+            else:
+                brawlMove(0,sx,sy)
         else:
             if sx>cx:
                 if sy>cy:
@@ -135,52 +171,53 @@ def findObj():
     returna[3] = cspots[1]
     
 #check for self
-    try:
-        selflocation = pyautogui.locateOnScreen("self.png",region = (300,204,1000,700), grayscale = False, confidence=0.6)
-                                 
-        if selflocation is not None:
-            print("found myself")
-            returna[0] = selflocation[0]
-            returna[1] = selflocation[1]
-                                                          
-    except pyautogui.ImageNotFoundException:                
-        time.sleep(0.01)
-        try:
-            selflocation = pyautogui.locateOnScreen("selfrightcorner.png",region = (300,204,1000,700), grayscale = False, confidence=0.6)
-                                 
-            if selflocation is not None:
-                print("found myself")
-                returna[0] = selflocation[0]
-                returna[1] = selflocation[1]
-        except Exception as e:
-            try:
-                selflocation = pyautogui.locateOnScreen("selfbush.png",region = (300,204,1000,700), grayscale = False, confidence=0.6)
-                                         
-                if selflocation is not None:
-                    print("found myself")
-                    returna[0] = selflocation[0]
-                    returna[1] = selflocation[1]
-                                                                  
-            except pyautogui.ImageNotFoundException:                
-                time.sleep(0.01)
-                try:
-                    selflocation = pyautogui.locateOnScreen("selfbushright.png",region = (300,204,1000,700), grayscale = False, confidence=0.6)
-                                         
-                    if selflocation is not None:
-                        print("found myself")
-                        returna[0] = selflocation[0]
-                        returna[1] = selflocation[1]
-                except Exception as e:
-                    print(f"Unexpected error: {e}")
-                                        
-            except Exception as e:
-                print(f"Unexpected error: {e}")
-                time.sleep(0.5)
-                                
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        time.sleep(0.5)
-#look for self in bush
+    img = pyautogui.screenshot(region = (300,304,1000,550))
+    img = img.convert('RGB')
+
+    img_array = np.array(img)
+
+    # Define the target color and threshold
+    target_color = np.array([5, 250, 51])
+    threshold = 15
+
+    # Calculate the difference between each pixel and the target color
+    diff = np.abs(img_array - target_color)
+
+    # Create a mask for pixels that are within the threshold
+    mask = np.all(diff <= threshold, axis=-1)
+
+    # Set matching pixels to black and others to white
+    img_array[mask] = [0, 0, 0]
+    img_array[~mask] = [255, 255, 255]
+
+    # Convert the NumPy array back to an image
+    result_img = Image.fromarray(img_array)
+
+
+    text = pytesseract.image_to_string(result_img)
+    print(text)
+
+    data = pytesseract.image_to_data(result_img, output_type=pytesseract.Output.DICT)
+    # Loop through the words detected
+    for i in range(len(data['text'])):
+        if 'shudder' in data['text'][i].lower():
+            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+            returna[0],returna[1] = x+40,y+80
+            print("found shudder")
+        elif 'shu' in data['text'][i].lower():
+            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+            returna[0],returna[1] = x+40,y+80
+            print("found shudder second way")
+        elif 'dde' in data['text'][i].lower():
+            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+            returna[0],returna[1] = x+40,y+80
+            print("found shudder third way")
+        elif 'der' in data['text'][i].lower():
+            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+            returna[0],returna[1] = x+40,y+80
+            print("found shudder fourth way")
+        
+    
     
     return returna
 
@@ -391,9 +428,17 @@ while keyboard.is_pressed('q') == False:
             reopenBrawl()
         if count>11:
             click(1500,900)
+        if count == 13:
+            click(557,588)
+        if count==15:
+            hold(510,312)
+        if count == 16:
+            click(900,860)
             count = 0
      
     except Exception as e:
         print(f"Unexpected error: {e}")
         time.sleep(2)
     
+
+
